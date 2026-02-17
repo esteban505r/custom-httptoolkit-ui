@@ -111,7 +111,19 @@ export function getRuleDefaultStep(type: RuleType, ruleStore: RulesStore): Step 
     }
 };
 
-function buildRequestMatchers(request: HtkRequest) {
+export type RecordingMatchBy = 'url-only' | 'full';
+
+function buildRequestMatchers(request: HtkRequest, matchBy: RecordingMatchBy = 'full') {
+    const urlParts = request.parsedUrl.toString().split('?');
+    const path = urlParts[0];
+
+    const methodMatcher = new (HttpRule.MethodMatchers[request.method as MethodName] || HttpRule.WildcardMatcher)();
+    const pathMatcher = new matchers.FlexiblePathMatcher(path);
+
+    if (matchBy === 'url-only') {
+        return [methodMatcher, pathMatcher];
+    }
+
     const hasBody = !!request.body.decodedData &&
         request.body.decodedData.length < 10_000;
     const hasJsonBody = hasBody &&
@@ -126,10 +138,7 @@ function buildRequestMatchers(request: HtkRequest) {
         ? [new matchers.RawBodyMatcher(request.body.decodedData!.toString())]
     : [];
 
-    const urlParts = request.parsedUrl.toString().split('?');
-    const path = urlParts[0];
-
-    const hasQuery = urlParts.length > 1; // Not just with parameters, but also trailing '?'
+    const hasQuery = urlParts.length > 1;
     const queryMatcher = hasQuery
         ? [new matchers.QueryMatcher(
             querystring.parse(urlParts.slice(1).join('?')) as ({ [key: string]: string | string[] })
@@ -137,8 +146,8 @@ function buildRequestMatchers(request: HtkRequest) {
         : [];
 
     return [
-        new (HttpRule.MethodMatchers[request.method as MethodName] || HttpRule.WildcardMatcher)(),
-        new matchers.FlexiblePathMatcher(path),
+        methodMatcher,
+        pathMatcher,
         ...queryMatcher,
         ...bodyMatcher
     ];
@@ -155,7 +164,12 @@ export function buildRuleFromRequest(rulesStore: RulesStore, request: HtkRequest
     };
 }
 
-export function buildRuleFromExchange(exchange: HttpExchangeView): HtkRule {
+export function buildRuleFromExchange(
+    exchange: HttpExchangeView,
+    options?: { matchBy?: RecordingMatchBy }
+): HtkRule {
+    const matchBy = options?.matchBy ?? 'full';
+
     const { statusCode, statusMessage, headers } = exchange.isSuccessfulExchange()
         ? exchange.response
         : { statusCode: 200, statusMessage: "OK", headers: {} as Headers };
@@ -190,7 +204,7 @@ export function buildRuleFromExchange(exchange: HttpExchangeView): HtkRule {
         id: uuid(),
         type: 'http',
         activated: true,
-        matchers: buildRequestMatchers(exchange.request),
+        matchers: buildRequestMatchers(exchange.request, matchBy),
         steps: [new HttpRule.StaticResponseStep(
             statusCode,
             statusMessage || getStatusMessage(statusCode),
@@ -206,6 +220,13 @@ export const buildDefaultGroupWrapper = (items: HtkRuleItem[]): HtkRuleGroup => 
     title: "Default rules",
     collapsed: true,
     items: items
+});
+
+export const buildGroupWrapper = (id: string, title: string, items: HtkRuleItem[]): HtkRuleGroup => ({
+    id,
+    title,
+    collapsed: true,
+    items
 });
 
 export const buildDefaultGroupRules = (

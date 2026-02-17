@@ -36,9 +36,10 @@ import { EmptyState } from '../common/empty-state';
 import { SelfSizedEditor } from '../editor/base-editor';
 
 import { ViewEventList } from './view-event-list';
-import { ViewEventListFooter } from './view-event-list-footer';
+import { ViewEventListFooter, HEADER_FOOTER_HEIGHT } from './view-event-list-footer';
 import { ViewEventContextMenuBuilder } from './view-context-menu-builder';
 import { PaneOuterContainer } from './view-details-pane';
+import { RecordButton } from './view-event-list-buttons';
 import { HttpDetailsPane } from './http/http-details-pane';
 import { TlsFailureDetailsPane } from './tls/tls-failure-details-pane';
 import { TlsTunnelDetailsPane } from './tls/tls-tunnel-details-pane';
@@ -70,7 +71,8 @@ const ViewPageKeyboardShortcuts = (props: {
     onBuildRuleFromExchange: (event: HttpExchange) => void,
     onDelete: (event: CollectedEvent) => void,
     onClear: () => void,
-    onStartSearch: () => void
+    onStartSearch: () => void,
+    onToggleRecording: () => void
 }) => {
     const selectedEvent = props.selectedEvent;
 
@@ -132,6 +134,13 @@ const ViewPageKeyboardShortcuts = (props: {
         props.onStartSearch();
         event.preventDefault();
     }, [props.onStartSearch]);
+
+    useHotkeys('Ctrl+Shift+r, Cmd+Shift+r', (event) => {
+        if (props.isPaidUser) {
+            props.onToggleRecording();
+            event.preventDefault();
+        }
+    }, [props.isPaidUser, props.onToggleRecording]);
 
     return null;
 };
@@ -427,6 +436,7 @@ class ViewPage extends React.Component<ViewPageProps> {
                 onDelete={this.onDelete}
                 onClear={this.onForceClear}
                 onStartSearch={this.onStartSearch}
+                onToggleRecording={this.onToggleRecording}
             />
 
             <SplitPane
@@ -469,6 +479,15 @@ class ViewPage extends React.Component<ViewPageProps> {
                     aria-label='The selected event details pane'
                     aria-keyshortcuts={`${AriaCtrlCmd}+]`}
                 >
+                    <DetailsRecordingBar>
+                        <RecordingBarLabel>
+                            <RecordingBarTitle>Record mocks</RecordingBarTitle>
+                            <RecordingBarTooltip title={RECORDING_FEATURE_TOOLTIP} aria-label="Recording feature help">
+                                i
+                            </RecordingBarTooltip>
+                        </RecordingBarLabel>
+                        <RecordButton />
+                    </DetailsRecordingBar>
                     { rightPane }
                 </PaneOuterContainer>
             </SplitPane>
@@ -568,6 +587,16 @@ class ViewPage extends React.Component<ViewPageProps> {
     }
 
     @action.bound
+    onToggleRecording() {
+        const { eventsStore } = this.props;
+        if (eventsStore!.isRecording) {
+            eventsStore.stopRecording();
+        } else {
+            eventsStore.startRecording();
+        }
+    }
+
+    @action.bound
     async onPrepareToResendRequest(exchange: HttpExchangeView) {
         const { sendStore, navigate } = this.props;
 
@@ -654,6 +683,41 @@ class ViewPage extends React.Component<ViewPageProps> {
         this.listRef.current?.scrollToEnd();
     }
 }
+
+const RECORDING_FEATURE_TOOLTIP =
+    'Record HTTP responses as mock rules: click Start recording, then trigger the requests you want. ' +
+    'Each response is saved as a rule so future matching requests get the same response. ' +
+    'Use Options to only record 2xx responses or to match by URL only (easiest). Shortcut: Ctrl+Shift+R';
+
+const DetailsRecordingBar = styled.div`
+    flex-shrink: 0;
+    min-height: ${HEADER_FOOTER_HEIGHT}px;
+    padding: 0 20px;
+    border-bottom: 1px solid ${p => p.theme.containerBorder};
+    background-color: ${p => p.theme.mainBackground};
+    display: flex;
+    align-items: center;
+    gap: 12px;
+`;
+
+const RecordingBarLabel = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+`;
+
+const RecordingBarTitle = styled.span`
+    font-size: ${p => p.theme.textSize};
+    color: ${p => p.theme.mainColor};
+`;
+
+const RecordingBarTooltip = styled.span`
+    font-size: ${p => p.theme.textSize};
+    color: ${p => p.theme.mainLowlightColor};
+    opacity: 0.8;
+    cursor: help;
+`;
 
 const LeftPane = styled.div`
     position: relative;

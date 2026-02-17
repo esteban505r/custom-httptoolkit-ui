@@ -81,7 +81,7 @@ const rulesStore = new RulesStore(accountStore, proxyStore,
         return exchange!;
     }
 );
-const eventsStore = new EventsStore(proxyStore, apiStore, rulesStore);
+const eventsStore = new EventsStore(proxyStore, apiStore, rulesStore, accountStore);
 const sendStore = new SendStore(accountStore, eventsStore, rulesStore, proxyStore);
 
 const stores = {

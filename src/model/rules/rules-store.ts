@@ -31,6 +31,7 @@ import {
     MockttpBreakpointedRequest,
     MockttpBreakpointedResponse
 } from '../../types';
+import * as localForage from 'localforage';
 import { lazyObservablePromise } from '../../util/observable';
 import { persist, hydrate } from '../../util/mobx-persist/persist';
 import { logError } from '../../errors';
@@ -65,6 +66,7 @@ import {
 import {
     buildDefaultGroupRules,
     buildDefaultGroupWrapper,
+    buildGroupWrapper,
     buildDefaultRulesRoot,
     buildForwardingRuleIntegration,
 } from './rule-creation';
@@ -194,24 +196,49 @@ export class RulesStore {
         console.log('Rules store initialized');
     });
 
+    /** One-time migration: copy rules-store from localStorage to IndexedDB if present (avoids quota). */
+    private async migrateRulesStoreToLocalForage(key: string): Promise<void> {
+        try {
+            const fromIndexedDB = await localForage.getItem<string>(key);
+            if (fromIndexedDB != null) return; // Already in IndexedDB
+            const fromLocal = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+            if (fromLocal != null) {
+                await localForage.setItem(key, fromLocal);
+            }
+        } catch (e) {
+            logError(e);
+        }
+    }
+
     private async loadSettings() {
         const { accountStore } = this;
 
+        // Use IndexedDB (localForage) for rules-store to avoid localStorage quota (recorded rules can be large)
+        const RULES_STORE_KEY = 'rules-store';
+        await this.migrateRulesStoreToLocalForage(RULES_STORE_KEY);
+
+        const rulesStorage = {
+            getItem: (key: string) => localForage.getItem<string>(key),
+            setItem: (key: string, value: string) => localForage.setItem(key, value),
+            removeItem: (key: string) => localForage.removeItem(key),
+            clear: () => localForage.clear(),
+        };
+
         // Load rule configuration settings from storage
         await hydrate({
-            key: 'rules-store',
+            key: RULES_STORE_KEY,
             store: this,
+            storage: rulesStorage,
             dataTransform: (data: {}) => _.omit(data, 'rules'),
         });
 
         try {
-            // Backward compatibility for the previous 'draft' data fields.
-            const rawStoreData = JSON.parse(localStorage.getItem('rules-store') ?? '{}');
+            const rawStoreData = await localForage.getItem<string>(RULES_STORE_KEY).then(s => s ? JSON.parse(s) : {});
             runInAction(() => {
-                if ('draftWhitelistedCertificateHosts' in rawStoreData) {
+                if (rawStoreData && 'draftWhitelistedCertificateHosts' in rawStoreData) {
                     this.whitelistedCertificateHosts = rawStoreData.draftWhitelistedCertificateHosts;
                 }
-                if ('draftClientCertificateHostMap' in rawStoreData) {
+                if (rawStoreData && 'draftClientCertificateHostMap' in rawStoreData) {
                     this.clientCertificateHostMap = rawStoreData.draftClientCertificateHostMap;
                 }
             });
@@ -222,17 +249,17 @@ export class RulesStore {
         if (accountStore.mightBePaidUser) {
             // Load the actual rules from storage (separately, so deserialization can use settings loaded above)
             await hydrate({
-                key: 'rules-store',
+                key: RULES_STORE_KEY,
                 store: this,
+                storage: rulesStorage,
                 dataTransform: (data: { rules: any }) => ({
                     rules: migrateRuleData(data.rules)
                 }),
                 customArgs: { rulesStore: this } as DeserializationArgs
-            }).catch((err) => {
+            }).catch(async (err) => {
                 console.log('Failed to load last-run rules',
                     err,
-                    // Log the full rule data for debugging:
-                    JSON.parse(localStorage.getItem('rules-store') ?? '{}')?.rules
+                    (await localForage.getItem<string>(RULES_STORE_KEY)) ?? '{}'
                 );
 
                 logError(err);
@@ -740,6 +767,44 @@ export class RulesStore {
         }
 
         this.saveItem(draftDefaultGroupPath.concat(0));
+    }
+
+    @computed
+    get draftRuleGroups(): Array<{ id: string; title: string }> {
+        return this.draftRules.items
+            .filter((item): item is HtkRuleGroup => isRuleGroup(item) && !isRuleRoot(item))
+            .map(g => ({ id: g.id, title: g.title }));
+    }
+
+    @action.bound
+    addRuleToGroup(rule: HtkRule, groupId: string) {
+        const draftGroupPath = findItemPath(this.draftRules, { id: groupId });
+        if (!draftGroupPath) return;
+        const group = getItemAtPath(this.draftRules, draftGroupPath);
+        if (!isRuleGroup(group)) return;
+        group.items.unshift(rule);
+        this.saveItem(draftGroupPath.concat(0));
+    }
+
+    @action.bound
+    addRuleToNamedGroup(rule: HtkRule, groupTitle: string) {
+        const { draftRules } = this;
+        const trimmedTitle = groupTitle.trim();
+        if (!trimmedTitle) {
+            this.ensureRuleExists(rule);
+            return;
+        }
+        for (let i = 0; i < draftRules.items.length; i++) {
+            const item = draftRules.items[i];
+            if (isRuleGroup(item) && !isRuleRoot(item) && item.title === trimmedTitle) {
+                item.items.unshift(rule);
+                this.saveItem([i, 0]);
+                return;
+            }
+        }
+        const newGroup = buildGroupWrapper(uuid(), trimmedTitle, [rule]);
+        draftRules.items.unshift(newGroup);
+        this.saveItem([0, 0]);
     }
 
     @action.bound

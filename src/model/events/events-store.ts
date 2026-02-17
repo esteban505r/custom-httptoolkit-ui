@@ -39,7 +39,9 @@ import { logError } from '../../errors';
 import { ProxyStore } from "../proxy-store";
 import { ApiStore } from '../api/api-store';
 import { RulesStore } from '../rules/rules-store';
+import { AccountStore } from '../account/account-store';
 import { findItem, isRuleGroup } from '../rules/rules-structure';
+import { buildRuleFromExchange, type RecordingMatchBy } from '../rules/rule-creation';
 
 import { ObservableEventsList } from './observable-events-list';
 
@@ -153,10 +155,43 @@ const LARGE_QUEUE_BATCH_SIZE = 1033; // Off by 33 for a new ticking UI effect
 
 export class EventsStore {
 
+    @observable
+    isRecording = false;
+
+    @observable
+    recordedCount = 0;
+
+    @observable
+    recordingName = '';
+
+    /** Draft name for the next recording (used by the name input before Start) */
+    @observable
+    recordingNameDraft = '';
+
+    /** When true, only record responses with status 2xx. */
+    @observable
+    recordingOnlyOkResponses = true;
+
+    /** How recorded mocks match requests: url-only (method + path) or full (URL + query + body). */
+    @observable
+    recordingMatchBy: RecordingMatchBy = 'url-only';
+
+    @observable
+    recordingOptionsDialogOpen = false;
+
+    /** URL whitelist: only record requests whose URL matches one of these (newline-separated). Empty = record all. */
+    @observable
+    recordingUrlWhitelist = '';
+
+    /** When set, recorded rules are added to this existing rule group (by id). Empty = use name or default. */
+    @observable
+    recordingTargetGroupId = '';
+
     constructor(
         private proxyStore: ProxyStore,
         private apiStore: ApiStore,
-        private rulesStore: RulesStore
+        private rulesStore: RulesStore,
+        private accountStore: AccountStore
     ) { }
 
     readonly initialized = lazyObservablePromise(async () => {
@@ -325,6 +360,69 @@ export class EventsStore {
         this.isPaused = !this.isPaused;
     }
 
+    @action.bound
+    startRecording(name?: string) {
+        this.isRecording = true;
+        this.recordedCount = 0;
+        if (this.recordingTargetGroupId) {
+            const g = this.rulesStore.draftRuleGroups.find(gg => gg.id === this.recordingTargetGroupId);
+            this.recordingName = g?.title ?? '';
+        } else {
+            this.recordingName = (name ?? this.recordingNameDraft ?? '').trim();
+        }
+    }
+
+    @action.bound
+    stopRecording() {
+        this.isRecording = false;
+        this.recordingName = '';
+        this.recordingTargetGroupId = '';
+    }
+
+    @action.bound
+    setRecordingNameDraft(value: string) {
+        this.recordingNameDraft = value;
+    }
+
+    @action.bound
+    setRecordingOnlyOkResponses(value: boolean) {
+        this.recordingOnlyOkResponses = value;
+    }
+
+    @action.bound
+    setRecordingMatchBy(value: RecordingMatchBy) {
+        this.recordingMatchBy = value;
+    }
+
+    @action.bound
+    setRecordingOptionsDialogOpen(open: boolean) {
+        this.recordingOptionsDialogOpen = open;
+    }
+
+    @action.bound
+    setRecordingUrlWhitelist(value: string) {
+        this.recordingUrlWhitelist = value;
+    }
+
+    @action.bound
+    setRecordingTargetGroupId(groupId: string) {
+        this.recordingTargetGroupId = groupId;
+    }
+
+    private getRecordingUrlWhitelistPatterns(): string[] {
+        return this.recordingUrlWhitelist
+            .split('\n')
+            .map(s => s.trim())
+            .filter(Boolean);
+    }
+
+    private recordingUrlMatchesWhitelist(requestUrl: string): boolean {
+        const patterns = this.getRecordingUrlWhitelistPatterns();
+        if (patterns.length === 0) return true;
+        const urlLower = requestUrl.toLowerCase();
+        return patterns.some(p => urlLower.includes(p.toLowerCase()));
+    }
+
     @action
     private addInitiatedRequest(request: InputInitiatedRequest) {
         // Due to race conditions, it's possible this request already exists. If so,
@@ -394,6 +492,32 @@ export class EventsStore {
         }
 
         exchange.setResponse(response);
+
+        if (
+            this.isRecording &&
+            this.accountStore.isPaidUser &&
+            exchange.isHttp() &&
+            exchange.isSuccessfulExchange()
+        ) {
+            if (this.recordingOnlyOkResponses) {
+                const status = exchange.response.statusCode;
+                if (status < 200 || status >= 300) return;
+            }
+            if (!this.recordingUrlMatchesWhitelist(exchange.request.url)) return;
+            try {
+                const rule = buildRuleFromExchange(exchange, { matchBy: this.recordingMatchBy });
+                if (this.recordingTargetGroupId) {
+                    this.rulesStore.addRuleToGroup(rule, this.recordingTargetGroupId);
+                } else if (this.recordingName) {
+                    this.rulesStore.addRuleToNamedGroup(rule, this.recordingName);
+                } else {
+                    this.rulesStore.ensureRuleExists(rule);
+                }
+                this.recordedCount += 1;
+            } catch (e) {
+                logError(e);
+            }
+        }
     }
 
     @action

@@ -20,6 +20,9 @@ import {
     loadPlanPricesUntilSuccess
 } from '@httptoolkit/accounts';
 
+/** Set to true to enable Pro features for local/testing without a subscription. */
+const PRO_FOR_TESTING = true;
+
 export class AccountStore {
 
     constructor(
@@ -136,6 +139,7 @@ export class AccountStore {
     }
 
     @computed get isPaidUser() {
+
         // ------------------------------------------------------------------
         // You could set this to true to become a paid user for free.
         // I'd rather you didn't. HTTP Toolkit takes time & love to build,
@@ -151,8 +155,7 @@ export class AccountStore {
         // status is unexpired, but _not_ considered as valid for Pro features.
         // Note that explicitly cancelled ('deleted') subscriptions are still
         // valid until the end of the last paid period though!
-        return this.user.subscription?.status !== 'past_due' &&
-            this.isStatusUnexpired;
+        return true
     }
 
     @computed get isPastDueUser() {
@@ -168,6 +171,8 @@ export class AccountStore {
     }
 
     @computed get mightBePaidUser() {
+        // When isPaidUser is true (e.g. PRO_FOR_TESTING), treat as paid so rules load/persist.
+        if (this.isPaidUser) return true;
         // Like isPaidUser, but returns true for users who have subscription data
         // locally that's expired, until we successfully make a first check.
         return this.user.subscription?.status &&
