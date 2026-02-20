@@ -23,6 +23,7 @@ import {
     mapRules
 } from '../../model/rules/rules-structure';
 import { SERIALIZED_RULES_MIME_TYPE, serializeRules } from '../../model/rules/rule-serialization';
+import { exportRulesToMarkdown, extractRulesFromMarkdownOrJson } from '../../model/rules/rules-docs-export';
 
 import { clickOnEnter } from '../component-utils';
 import { Button, SecondaryButton } from '../common/inputs';
@@ -192,6 +193,18 @@ class ModifyPage extends React.Component<ModifyPageProps> {
                     <Icon icon={['fas', 'download']} />
                 </OtherButton>
                 <OtherButton
+                    disabled={!isPaidUser || draftRules.items.length === 0}
+                    onClick={this.exportDocsAsMarkdown}
+                    onKeyPress={clickOnEnter}
+                    title={
+                        isPaidUser
+                            ? 'Export as Markdown (docs + full rules for import)'
+                            : 'With Pro: Export as Markdown for team docs and import'
+                    }
+                >
+                    <Icon icon={['fas', 'file-alt']} />
+                </OtherButton>
+                <OtherButton
                     disabled={!areSomeRulesUnsaved}
                     onClick={this.resetRuleDrafts}
                     onKeyPress={clickOnEnter}
@@ -323,14 +336,19 @@ class ModifyPage extends React.Component<ModifyPageProps> {
     readonly importRules = async () => {
         const uploadedFile = await uploadFile('text', [
             '.htkrules',
+            '.md',
             'application/json',
-            'application/htkrules+json'
+            'application/htkrules+json',
+            'text/markdown'
         ]);
         if (uploadedFile) {
             try {
-                this.props.rulesStore.loadSavedRules(
-                    JSON.parse(uploadedFile)
-                );
+                const data = extractRulesFromMarkdownOrJson(uploadedFile);
+                if (data == null) {
+                    alert('Could not read rules from this file. Use a .htkrules JSON file or a Markdown file that contains an embedded rules block (```htkrules).');
+                    return;
+                }
+                this.props.rulesStore.loadSavedRules(data);
             } catch (e) {
                 logError(e);
                 alert(`Rules could not be imported: ${e}`);
@@ -348,6 +366,14 @@ class ModifyPage extends React.Component<ModifyPageProps> {
         }.htkrules`;
 
         saveFile(filename, SERIALIZED_RULES_MIME_TYPE, rulesetContent);
+    };
+
+    readonly exportDocsAsMarkdown = async () => {
+        const mdContent = exportRulesToMarkdown(this.props.rulesStore.draftRules);
+        const filename = `rules-docs_${
+            dateFns.format(Date.now(), 'YYYY-MM-DD_HH-mm')
+        }.md`;
+        saveFile(filename, 'text/markdown;charset=utf-8', mdContent);
     }
 }
 

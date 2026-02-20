@@ -27,6 +27,7 @@ import { Sidebar, SidebarItem, SIDEBAR_WIDTH } from './sidebar';
 import { InterceptPage } from './intercept/intercept-page';
 import { ViewPage } from './view/view-page';
 import { ModifyPage } from './modify/modify-page';
+import { DocsPage } from './docs/docs-page';
 import { SendPage } from './send/send-page';
 import { SettingsPage } from './settings/settings-page';
 
@@ -78,6 +79,10 @@ const AppKeyboardShortcuts = (props: {
     }, [props.navigate]);
     useHotkeys('Ctrl+4,Cmd+4', (e) => {
         props.navigate('/send');
+        e.preventDefault();
+    }, [props.navigate]);
+    useHotkeys('Ctrl+5,Cmd+5', (e) => {
+        props.navigate('/docs');
         e.preventDefault();
     }, [props.navigate]);
     useHotkeys('Ctrl+9,Cmd+9', (e) => {
@@ -146,6 +151,20 @@ class App extends React.Component<{
                 }]
                 : []
             ),
+
+            ...(
+                serverVersion.state !== 'fulfilled' ||
+                versionSatisfies(serverVersion.value, MODIFY_RULE_SERVER_RANGE)
+            )
+                ? [{
+                    name: 'Docs',
+                    title: `Rules & mocks documentation (${Ctrl}+5)`,
+                    icon: 'FileText',
+                    position: 'top',
+                    type: 'router',
+                    url: '/docs'
+                }]
+                : [],
 
             ...(this.canVisitSend
                 ? [{
@@ -228,6 +247,7 @@ class App extends React.Component<{
                     <Route path={'/view/:eventId'} pageComponent={ViewPage} />
                     <Route path={'/modify'} pageComponent={ModifyPage} />
                     <Route path={'/modify/:initialRuleId'} pageComponent={ModifyPage} />
+                    <Route path={'/docs'} pageComponent={DocsPage} />
                     <Route path={'/send'} pageComponent={SendPage} />
                     <Route path={'/settings'} pageComponent={SettingsPage} />
                 </Router>

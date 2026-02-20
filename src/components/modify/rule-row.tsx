@@ -56,6 +56,7 @@ import { StepConfiguration } from './step-config';
 import { DragHandle } from './rule-drag-handle';
 import { IconMenu, IconMenuButton } from './rule-icon-menu';
 import { RuleTitle, EditableRuleTitle } from './rule-title';
+import { Markdown } from '../common/text-content';
 
 const RowContainer = styled(LittleCard)<{
     deactivated?: boolean,
@@ -199,6 +200,38 @@ const DetailsHeader = styled.div`
     margin-bottom: 20px;
 `;
 
+const RuleDescriptionSection = styled.div`
+    flex-basis: 100%;
+    width: 100%;
+    margin-top: 8px;
+    margin-bottom: 4px;
+`;
+
+const RuleDescriptionDisplay = styled.div`
+    font-size: ${p => p.theme.textSize};
+    opacity: ${p => p.theme.lowlightTextOpacity};
+    line-height: 1.4;
+    padding: 8px 0;
+`;
+
+const RuleDescriptionTextarea = styled.textarea`
+    width: 100%;
+    min-height: 60px;
+    box-sizing: border-box;
+    font-size: ${p => p.theme.textSize};
+    font-family: inherit;
+    padding: 8px;
+    margin: 4px 0;
+    border: 1px solid ${p => p.theme.containerBorder};
+    border-radius: 4px;
+    background: ${p => p.theme.mainBackground};
+    color: ${p => p.theme.mainColor};
+    resize: vertical;
+    &::placeholder {
+        opacity: 0.7;
+    }
+`;
+
 const HighPriorityMarker = styled(Icon).attrs(() => ({
     icon: ['fas', 'exclamation'],
     title: 'High-priority rule: this rule overrides all non-high-priority rules'
@@ -326,6 +359,9 @@ export class RuleRow extends React.Component<{
     @observable
     private titleEditState: undefined | { originalTitle?: string };
 
+    @observable
+    private isEditingDescription = false;
+
     render() {
         const {
             index,
@@ -443,6 +479,43 @@ export class RuleRow extends React.Component<{
                         }
                     />
                 }
+
+                { !collapsed && <RuleDescriptionSection>
+                    { this.isEditingDescription
+                        ? <>
+                            <RuleDescriptionTextarea
+                                value={rule.description || ''}
+                                placeholder="Add a description (Markdown supported)"
+                                onChange={(e) => { (rule as { description?: string }).description = e.target.value || undefined; }}
+                                onBlur={() => { this.isEditingDescription = false; }}
+                                onClick={(e) => e.stopPropagation()}
+                            />
+                            <IconMenuButton
+                                title="Finish editing description"
+                                icon={['fas', 'check']}
+                                onClick={noPropagation(() => { this.isEditingDescription = false; })}
+                            />
+                        </>
+                        : <>
+                            { rule.description
+                                ? <RuleDescriptionDisplay onClick={(e) => e.stopPropagation()}>
+                                    <Markdown content={rule.description} />
+                                  </RuleDescriptionDisplay>
+                                : <RuleDescriptionDisplay
+                                    style={{ fontStyle: 'italic', opacity: 0.7 }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    No description. Click edit to add one (Markdown supported).
+                                  </RuleDescriptionDisplay>
+                            }
+                            <IconMenuButton
+                                title="Edit description"
+                                icon={['fas', 'edit']}
+                                onClick={noPropagation(() => { this.isEditingDescription = true; })}
+                            />
+                        </>
+                    }
+                </RuleDescriptionSection> }
 
                 <MatcherOrSteps>
                     { shouldShowSummary &&

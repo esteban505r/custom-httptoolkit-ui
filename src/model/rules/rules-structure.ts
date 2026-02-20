@@ -12,6 +12,7 @@ export type HtkRuleItem =
 export type HtkRuleGroup = {
     id: string;
     title: string;
+    description?: string;
     items: HtkRuleItem[];
     collapsed?: boolean;
 };

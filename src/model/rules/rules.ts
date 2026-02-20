@@ -430,6 +430,7 @@ export type HtkRule = (
     | RTCRule
 ) & {
     title?: string;
+    description?: string;
 };
 
 export type RuleType = HtkRule['type'];

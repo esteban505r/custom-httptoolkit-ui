@@ -68,6 +68,7 @@ const RuleSerializer = serializr.custom(
             id: data.id,
             type: data.type,
             title: data.title,
+            description: data.description,
             activated: data.activated,
             priority: 'priority' in data ? data.priority : undefined,
             matchers: data.matchers.map((m) =>
@@ -113,6 +114,7 @@ const RuleItemSerializer: serializr.PropSchema = serializr.custom(
 const RuleGroupSchema = serializr.createSimpleSchema<HtkRuleGroup>({
     id: serializr.primitive(),
     title: serializr.primitive(),
+    description: serializr.optional(serializr.primitive()),
     items: serializr.list(RuleItemSerializer)
 });
 

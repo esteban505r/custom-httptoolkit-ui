@@ -1,3 +1,4 @@
+import * as _ from 'lodash';
 import * as React from 'react';
 import { action } from 'mobx';
 import { observer, Observer } from 'mobx-react-lite'
@@ -25,6 +26,7 @@ import { clickOnEnter, noPropagation } from '../component-utils';
 import { TextInput } from '../common/inputs';
 import { DragHandle } from './rule-drag-handle';
 import { IconMenu, IconMenuButton } from './rule-icon-menu';
+import { Markdown } from '../common/text-content';
 
 const CollapsedItemPlaceholder = styled.div<{
     index: number,
@@ -84,6 +86,44 @@ const RuleGroupMenu = (p: {
     />
 </IconMenu>;
 
+const GroupHeaderRow = styled.div`
+    display: flex;
+    align-items: center;
+    width: 100%;
+`;
+
+const GroupDescriptionSection = styled.div`
+    width: 100%;
+    margin-top: 8px;
+    padding-left: 30px;
+    box-sizing: border-box;
+`;
+
+const GroupDescriptionDisplay = styled.div`
+    font-size: ${p => p.theme.textSize};
+    opacity: ${p => p.theme.lowlightTextOpacity};
+    line-height: 1.4;
+    padding: 4px 0;
+`;
+
+const GroupDescriptionTextarea = styled.textarea`
+    width: 100%;
+    min-height: 50px;
+    box-sizing: border-box;
+    font-size: ${p => p.theme.textSize};
+    font-family: inherit;
+    padding: 8px;
+    margin: 4px 0;
+    border: 1px solid ${p => p.theme.containerBorder};
+    border-radius: 4px;
+    background: ${p => p.theme.mainBackground};
+    color: ${p => p.theme.mainColor};
+    resize: vertical;
+    &::placeholder {
+        opacity: 0.7;
+    }
+`;
+
 const GroupHeaderContainer = styled.header<{
     depth: number,
     collapsed: boolean,
@@ -109,7 +149,8 @@ const GroupHeaderContainer = styled.header<{
     box-sizing: border-box;
 
     display: flex;
-    align-items: center;
+    flex-direction: ${p => p.collapsed ? 'row' : 'column'};
+    align-items: ${p => p.collapsed ? 'center' : 'stretch'};
 
     position: relative;
 
@@ -132,7 +173,7 @@ const GroupHeaderContainer = styled.header<{
         ${p => !p.collapsed
             ? 'text-shadow: 0 0 5px rgba(0,0,0,0.2);'
             : css`
-                > ${CollapsedItemPlaceholder} {
+                > ${GroupHeaderRow} ${CollapsedItemPlaceholder} {
                     box-shadow: 0 2px 20px 0 rgba(0,0,0,${p => p.theme.boxShadowAlpha});
                 }
             `
@@ -201,6 +242,7 @@ export const GroupHeader = observer((p: {
 }) => {
     const [isEditing, setEditing] = React.useState(false);
     const [unsavedTitle, setUnsavedTitle] = React.useState(p.group.title);
+    const [isEditingDescription, setEditingDescription] = React.useState(false);
 
     const toggleCollapsed = action(() => { p.group.collapsed = !p.group.collapsed });
 
@@ -247,63 +289,64 @@ export const GroupHeader = observer((p: {
             onKeyPress={clickOnEnter}
             tabIndex={0}
         >
-            <DragHandle
-                aria-label={`Drag handle for the '${
-                    isEditing
-                        ? unsavedTitle
-                        : p.group.title
-                }' rule group`}
-                {...provided.dragHandleProps}
-            />
-
-            <h2>
-                <Icon
-                    icon={['fas', p.group.collapsed ? 'chevron-down' : 'chevron-up']}
+            <GroupHeaderRow>
+                <DragHandle
+                    aria-label={`Drag handle for the '${
+                        isEditing
+                            ? unsavedTitle
+                            : p.group.title
+                    }' rule group`}
+                    {...provided.dragHandleProps}
                 />
-                { isEditing
-                    ? <TextInput
-                        autoFocus
-                        value={unsavedTitle}
-                        onChange={editTitle}
-                        onClick={(e) => e.stopPropagation()}
-                        onKeyPress={(e) => {
-                            if (e.key === 'Enter') saveTitle();
-                        }}
+
+                <h2>
+                    <Icon
+                        icon={['fas', p.group.collapsed ? 'chevron-down' : 'chevron-up']}
                     />
-                    : p.group.title
-                }
-            </h2>
-
-            <TitleButtonContainer>
-                { isEditing
-                    ? <>
-                        <TitleButton
-                            title="Save group name"
-                            icon={['fas', 'save']}
-                            onClick={noPropagation(saveTitle)}
+                    { isEditing
+                        ? <TextInput
+                            autoFocus
+                            value={unsavedTitle}
+                            onChange={editTitle}
+                            onClick={(e) => e.stopPropagation()}
+                            onKeyPress={(e) => {
+                                if (e.key === 'Enter') saveTitle();
+                            }}
                         />
-                        <TitleButton
-                            title="Reset group name"
-                            icon={['fas', 'undo']}
-                            onClick={noPropagation(resetTitle)}
+                        : p.group.title
+                    }
+                </h2>
+
+                <TitleButtonContainer>
+                    { isEditing
+                        ? <>
+                            <TitleButton
+                                title="Save group name"
+                                icon={['fas', 'save']}
+                                onClick={noPropagation(saveTitle)}
+                            />
+                            <TitleButton
+                                title="Reset group name"
+                                icon={['fas', 'undo']}
+                                onClick={noPropagation(resetTitle)}
+                            />
+                        </>
+                        : <TitleButton
+                            title="Edit group name"
+                            icon={['fas', 'edit']}
+                            onClick={noPropagation(startEditing)}
                         />
-                    </>
-                    : <TitleButton
-                        title="Edit group name"
-                        icon={['fas', 'edit']}
-                        onClick={noPropagation(startEditing)}
-                    />
-                }
-            </TitleButtonContainer>
+                    }
+                </TitleButtonContainer>
 
-            <RuleGroupMenu
-                toggleState={allRulesActivated}
-                onToggleActivation={toggleActivation}
-                onClone={cloneGroup}
-                onDelete={deleteGroup}
-            />
+                <RuleGroupMenu
+                    toggleState={allRulesActivated}
+                    onToggleActivation={toggleActivation}
+                    onClone={cloneGroup}
+                    onDelete={deleteGroup}
+                />
 
-            { p.collapsed && p.group.items.slice(0, 5).map((item, index) => {
+                { p.collapsed && p.group.items.slice(0, 5).map((item, index) => {
                 const initialMatcher = isRuleGroup(item) ? undefined : item.matchers[0];
                 const method = initialMatcher === undefined
                         ? undefined
@@ -326,6 +369,40 @@ export const GroupHeader = observer((p: {
                     activated={activated}
                 />
             }) }
+            </GroupHeaderRow>
+
+            { !p.collapsed && <GroupDescriptionSection onClick={(e) => e.stopPropagation()}>
+                { isEditingDescription
+                    ? <>
+                        <GroupDescriptionTextarea
+                            value={p.group.description || ''}
+                            placeholder="Add a group description (Markdown supported)"
+                            onChange={(e) => { p.group.description = e.target.value || undefined; }}
+                            onBlur={() => setEditingDescription(false)}
+                        />
+                        <TitleButton
+                            title="Finish editing description"
+                            icon={['fas', 'check']}
+                            onClick={noPropagation(() => setEditingDescription(false))}
+                        />
+                    </>
+                    : <>
+                        { p.group.description
+                            ? <GroupDescriptionDisplay>
+                                <Markdown content={p.group.description} />
+                              </GroupDescriptionDisplay>
+                            : <GroupDescriptionDisplay style={{ fontStyle: 'italic', opacity: 0.7 }}>
+                                No description. Click edit to add one (Markdown supported).
+                              </GroupDescriptionDisplay>
+                        }
+                        <TitleButton
+                            title="Edit group description"
+                            icon={['fas', 'edit']}
+                            onClick={noPropagation(() => setEditingDescription(true))}
+                        />
+                    </>
+                }
+            </GroupDescriptionSection> }
         </GroupHeaderContainer>
     }</Observer>}</Draggable>;
 });
