@@ -27,6 +27,7 @@ import { EventsStore } from '../../model/events/events-store';
 import { RulesStore } from '../../model/rules/rules-store';
 import { AccountStore } from '../../model/account/account-store';
 import { SendStore } from '../../model/send/send-store';
+import type { RegistryStore } from '../../registry/registry-store';
 import { HttpExchange } from '../../model/http/http-exchange';
 import { Filter, FilterSet } from '../../model/filters/search-filters';
 import { buildRuleFromExchange } from '../../model/rules/rule-creation';
@@ -36,6 +37,7 @@ import { EmptyState } from '../common/empty-state';
 import { SelfSizedEditor } from '../editor/base-editor';
 
 import { ViewEventList } from './view-event-list';
+import { RegistryStatusBanner } from './registry-status-banner';
 import { ViewEventListFooter, HEADER_FOOTER_HEIGHT } from './view-event-list-footer';
 import { ViewEventContextMenuBuilder } from './view-context-menu-builder';
 import { PaneOuterContainer } from './view-details-pane';
@@ -56,6 +58,7 @@ interface ViewPageProps {
     accountStore: AccountStore;
     rulesStore: RulesStore;
     sendStore: SendStore;
+    registryStore: RegistryStore;
     navigate: (path: string) => void;
     eventId?: string;
 }
@@ -171,6 +174,7 @@ const paneExpansionRequirements: { [key in ExpandableViewCardKey]: (event: Colle
 @inject('accountStore')
 @inject('rulesStore')
 @inject('sendStore')
+@inject('registryStore')
 @observer
 class ViewPage extends React.Component<ViewPageProps> {
 
@@ -462,6 +466,7 @@ class ViewPage extends React.Component<ViewPageProps> {
                         onClear={this.onClear}
                         onScrollToEnd={this.onScrollToEnd}
                     />
+                    <RegistryStatusBanner />
                     <ViewEventList
                         events={events}
                         filteredEvents={filteredEvents}
@@ -739,6 +744,7 @@ const StyledViewPage = styled(
         | 'accountStore'
         | 'rulesStore'
         | 'sendStore'
+        | 'registryStore'
         | 'navigate'
     >
 )`

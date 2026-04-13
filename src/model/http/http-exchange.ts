@@ -26,6 +26,7 @@ import { HTKEventBase } from '../events/event-base';
 import { StepClassKey, HtkRule, getRulePartKey } from '../rules/rules';
 
 import { ApiStore } from '../api/api-store';
+import type { RegistryEndpointAnnotation } from '../../registry/types';
 import { ApiDetector } from './api-detector';
 
 import { HttpBody } from './http-body';
@@ -188,6 +189,10 @@ export class HttpExchange extends HTKEventBase implements HttpExchangeView {
     // Undefined initially, defined for completed requests, false for 'not available'
     public matchedRule: { id: string, stepTypes: StepClassKey[] } | false | undefined;
 
+    /** API registry match from `.api.json` (null = not yet evaluated). */
+    @observable
+    public registryMatch: RegistryEndpointAnnotation | null = null;
+
     @observable
     public tags: string[];
 
@@ -251,6 +256,11 @@ export class HttpExchange extends HTKEventBase implements HttpExchangeView {
 
         Object.assign(this.timingEvents, request.timingEvents);
         this.tags = _.union(this.tags, request.tags);
+    }
+
+    @action.bound
+    setRegistryMatch(match: RegistryEndpointAnnotation | null) {
+        this.registryMatch = match;
     }
 
     updateFromUpstreamRequestHead(head: InputRuleEventDataMap['passthrough-request-head']) {

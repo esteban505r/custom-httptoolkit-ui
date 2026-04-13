@@ -203,6 +203,32 @@ const PathAndQuery = styled(Column)`
     flex-basis: 1000px;
 `;
 
+const PathAndQueryLine = styled.span`
+    display: flex;
+    min-width: 0;
+    align-items: baseline;
+    width: 100%;
+`;
+
+const PathPrimary = styled.span`
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+`;
+
+const RegistryCatalogHint = styled.span`
+    flex-shrink: 0;
+    margin-left: 6px;
+    opacity: 0.78;
+    font-size: 0.92em;
+    font-family: ${(p) => p.theme.monoFontFamily};
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+`;
+
 // Match Method + Status, but shrink right margin slightly so that
 // spinner + "WebRTC Media" fits OK.
 const EventTypeColumn = styled(Column)`
@@ -504,8 +530,26 @@ const ExchangeRow = inject('uiStore')(observer(({
         <Host role='gridcell' title={ request.parsedUrl.host }>
             { request.parsedUrl.host }
         </Host>
-        <PathAndQuery role='gridcell' title={ request.parsedUrl.pathname + request.parsedUrl.search }>
-            { request.parsedUrl.pathname + request.parsedUrl.search }
+        <PathAndQuery
+            role='gridcell'
+            title={
+                request.parsedUrl.pathname + request.parsedUrl.search +
+                (exchange.registryMatch?.endpointId
+                    ? `\nCatalog: ${exchange.registryMatch.serviceId}/${exchange.registryMatch.endpointId}`
+                    : '')
+            }
+        >
+            <PathAndQueryLine>
+                <PathPrimary>
+                    { request.parsedUrl.pathname + request.parsedUrl.search }
+                </PathPrimary>
+                {
+                    exchange.registryMatch?.serviceId && exchange.registryMatch?.endpointId &&
+                    <RegistryCatalogHint>
+                        { exchange.registryMatch.serviceId }/{ exchange.registryMatch.endpointId }
+                    </RegistryCatalogHint>
+                }
+            </PathAndQueryLine>
         </PathAndQuery>
     </TrafficEventListRow>;
 }));

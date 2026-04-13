@@ -105,6 +105,7 @@ const SETTINGS_CARD_KEYS =[
     'proxy',
     'connection',
     'api',
+    'registry',
     'themes'
 ] as const;
 type SettingsCardKey = typeof SETTINGS_CARD_KEYS[number];
@@ -403,6 +404,7 @@ export class UiStore {
         'proxy': { collapsed: false },
         'connection': { collapsed: false },
         'api': { collapsed: false },
+        'registry': { collapsed: false },
         'themes': { collapsed: false }
     };
 

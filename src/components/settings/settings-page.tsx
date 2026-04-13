@@ -14,6 +14,7 @@ import { uploadFile } from '../../util/ui';
 
 import { AccountStore } from '../../model/account/account-store';
 import { UiStore } from '../../model/ui/ui-store';
+import type { RegistryStore } from '../../registry/registry-store';
 import { serverVersion, versionSatisfies, PORT_RANGE_SERVER_RANGE } from '../../services/service-versions';
 
 import { CollapsibleCard, CollapsibleCardHeading } from '../common/card';
@@ -28,10 +29,12 @@ import { ProxySettingsCard } from './proxy-settings-card';
 import { ConnectionSettingsCard } from './connection-settings-card';
 import { SettingsButton, SettingsButtonLink } from './settings-components';
 import { ApiSettingsCard } from './api-settings-card';
+import { RegistrySettingsCard } from './registry-settings-card';
 
 interface SettingsPageProps {
     accountStore: AccountStore;
     uiStore: UiStore;
+    registryStore: RegistryStore;
 }
 
 const SettingsPagePlaceholder = styled.section`
@@ -117,6 +120,7 @@ const AccountUpdateSpinner = styled(Icon).attrs(() => ({
 
 @inject('accountStore')
 @inject('uiStore')
+@inject('registryStore')
 @observer
 class SettingsPage extends React.Component<SettingsPageProps> {
 
@@ -281,6 +285,8 @@ class SettingsPage extends React.Component<SettingsPageProps> {
                     }
 
                     <ApiSettingsCard {...cardProps.api} />
+
+                    <RegistrySettingsCard {...cardProps.registry} />
 
                     <CollapsibleCard {...cardProps.themes}>
                         <header>

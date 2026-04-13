@@ -31,6 +31,7 @@ import { RulesStore } from './model/rules/rules-store';
 import { InterceptorStore } from './model/interception/interceptor-store';
 import { ApiStore } from './model/api/api-store';
 import { SendStore } from './model/send/send-store';
+import { RegistryStore } from './registry/registry-store';
 
 import { serverVersion, lastServerVersion, UI_VERSION } from './services/service-versions';
 import {
@@ -68,6 +69,8 @@ const interceptorStore = new InterceptorStore(proxyStore, accountStore);
 // Some non-trivial interactions between rules & events stores here. Rules need to use events to
 // handle breakpoints (where rule logic reads from received event data), while events need to use
 // rules to store metadata about the rule that a received event says it matched with:
+const registryStore = new RegistryStore();
+
 const rulesStore = new RulesStore(accountStore, proxyStore,
     async function jumpToExchange(exchangeId: string) {
         await eventsStore.initialized;
@@ -83,7 +86,7 @@ const rulesStore = new RulesStore(accountStore, proxyStore,
         return exchange!;
     }
 );
-const eventsStore = new EventsStore(proxyStore, apiStore, rulesStore, accountStore);
+const eventsStore = new EventsStore(proxyStore, apiStore, rulesStore, accountStore, registryStore);
 const sendStore = new SendStore(accountStore, eventsStore, rulesStore, proxyStore);
 
 const stores = {
@@ -94,7 +97,8 @@ const stores = {
     eventsStore,
     interceptorStore,
     rulesStore,
-    sendStore
+    sendStore,
+    registryStore
 };
 
 const appStartupPromise = Promise.all(

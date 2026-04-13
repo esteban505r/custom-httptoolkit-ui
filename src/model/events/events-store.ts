@@ -1,7 +1,8 @@
 import * as _ from 'lodash';
 import {
     observable,
-    action
+    action,
+    reaction
 } from 'mobx';
 import { HarParseError } from 'har-validator';
 
@@ -51,6 +52,7 @@ import { FailedTlsConnection } from '../tls/failed-tls-connection';
 import { TlsTunnel } from '../tls/tls-tunnel';
 import { RawTunnel } from '../raw-tunnel';
 import { HttpExchange } from '../http/http-exchange';
+import { RegistryStore } from '../../registry/registry-store';
 import { WebSocketStream } from '../websockets/websocket-stream';
 import { RTCConnection } from '../webrtc/rtc-connection';
 import { RTCDataChannel } from '../webrtc/rtc-data-channel';
@@ -191,7 +193,8 @@ export class EventsStore {
         private proxyStore: ProxyStore,
         private apiStore: ApiStore,
         private rulesStore: RulesStore,
-        private accountStore: AccountStore
+        private accountStore: AccountStore,
+        private readonly registryStore: RegistryStore
     ) { }
 
     readonly initialized = lazyObservablePromise(async () => {
@@ -218,6 +221,17 @@ export class EventsStore {
         });
 
         console.log('Events store initialized');
+
+        reaction(
+            () => this.registryStore.registry,
+            () => {
+                this.eventsList.exchanges.forEach((ex) => {
+                    if (ex.isHttp()) {
+                        this.registryStore.annotateExchange(ex);
+                    }
+                });
+            }
+        );
     });
 
     @observable
@@ -438,6 +452,7 @@ export class EventsStore {
 
         const exchange = new HttpExchange(request, this.apiStore);
         this.eventsList.push(exchange);
+        this.registryStore.annotateExchange(exchange);
     }
 
     private getMatchedRule(request: InputCompletedRequest) {
@@ -472,6 +487,9 @@ export class EventsStore {
         }
 
         event.updateFromCompletedRequest(request, this.getMatchedRule(request));
+        if (event.isHttp()) {
+            this.registryStore.annotateExchange(event);
+        }
     }
 
     @action
@@ -498,6 +516,10 @@ export class EventsStore {
         }
 
         exchange.setResponse(response);
+
+        if (exchange.isHttp()) {
+            this.registryStore.annotateExchange(exchange);
+        }
 
         if (
             this.isRecording &&
