@@ -34,7 +34,7 @@ export const ExportAsHarButton = inject('accountStore')(observer((props: {
     accountStore?: AccountStore,
     events: ReadonlyArray<ViewableEvent>
 }) => {
-    const { isPaidUser } = props.accountStore!;
+    const isPaidUser = props.accountStore!.user.isPaidUser();
 
     return <IconButton
         icon={['fas', 'save']}
@@ -65,7 +65,7 @@ export const ImportHarButton = inject('eventsStore', 'accountStore')(
         accountStore?: AccountStore,
         eventsStore?: EventsStore
     }) => {
-        const { isPaidUser } = props.accountStore!;
+        const isPaidUser = props.accountStore!.user.isPaidUser();
 
         return <IconButton
             icon={['fas', 'folder-open']}
@@ -323,7 +323,7 @@ export const RecordButton = inject('eventsStore', 'accountStore', 'rulesStore')(
             startRecording,
             stopRecording
         } = eventsStore;
-        const { isPaidUser } = accountStore;
+        const isPaidUser = accountStore!.user.isPaidUser();
         const draftRuleGroups = rulesStore.draftRuleGroups;
 
         if (isRecording) {

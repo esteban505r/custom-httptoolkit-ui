@@ -230,6 +230,11 @@ export class EventsStore {
     private queueEventFlush() {
         if (!this.isFlushQueued) {
             this.isFlushQueued = true;
+
+            // We use both setTimeout _and_ requestAnimationFrame. This aims to
+            // ensure a minimum update frequency (even if throttled or the UI is slow)
+            // but provide a very fast update frequency the rest of the time.
+            setTimeout(this.flushQueuedUpdates, 500);
             requestAnimationFrame(this.flushQueuedUpdates);
         }
     }
@@ -247,11 +252,12 @@ export class EventsStore {
 
     @action.bound
     private flushQueuedUpdates() {
+        // N.b. this is called twice for each flush, but that's fine - very cheap to do so.
         this.isFlushQueued = false;
 
-        // We batch request updates until here. This runs in a mobx transaction and
-        // on request animation frame, so batches get larger and cheaper if
-        // the frame rate starts to drop.
+        // We batch request updates until here. This runs in a mobx transaction and on
+        // animation frame + slow setTimeout. The goal being that as rendering blocks
+        // for longer, batches will get larger and cheaper.
 
         if (this.eventQueue.length > LARGE_QUEUE_BATCH_SIZE) {
             // If there's a lot of events in the queue (only ever likely to happen
@@ -495,7 +501,7 @@ export class EventsStore {
 
         if (
             this.isRecording &&
-            this.accountStore.isPaidUser &&
+            this.accountStore.user.isPaidUser() &&
             exchange.isHttp() &&
             exchange.isSuccessfulExchange()
         ) {
