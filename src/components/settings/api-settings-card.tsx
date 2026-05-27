@@ -24,10 +24,24 @@ import {
 import { SettingsButton, SettingsExplanation } from './settings-components';
 import { TextInput } from '../common/inputs';
 import { ApiStore } from '../../model/api/api-store';
+import { RulesStore } from '../../model/rules/rules-store';
 import { ContentLabel } from '../common/text-content';
 import { ApiMetadata } from '../../model/api/api-interfaces';
+import {
+    endpointListFileToOpenApi,
+    endpointListHasMockResponses,
+    isHttptoolkitEndpointsFile,
+    type HttptoolkitEndpointsFile
+} from '../../util/endpoint-list-import';
+import { buildMockRulesFromEndpointList } from '../../util/endpoint-list-mock-rules';
 
 const UploadSpecButton = styled(SettingsButton).attrs(() => ({
+    type: 'submit'
+}))`
+    grid-column: 1 / span 3;
+`;
+
+const ImportEndpointListButton = styled(SettingsButton).attrs(() => ({
     type: 'submit'
 }))`
     grid-column: 1 / span 3;
@@ -70,17 +84,23 @@ function updateValidationMessage(element: HTMLInputElement | HTMLButtonElement, 
     element.reportValidity();
 }
 
-@inject('apiStore')
+@inject('apiStore', 'rulesStore')
 @observer
 export class ApiSettingsCard extends React.Component<
     CollapsibleCardProps & {
         apiStore?: ApiStore
+        rulesStore?: RulesStore
     }
 > {
 
     @observable.ref
     private selectedSpec: OpenAPIObject | undefined;
+
+    /** When set, saving the API also adds mock rules from this endpoint-list file. */
+    @observable.ref
+    private pendingEndpointListForMocks: HttptoolkitEndpointsFile | undefined;
     private uploadSpecButtonRef = React.createRef<HTMLButtonElement>();
+    private importEndpointListButtonRef = React.createRef<HTMLButtonElement>();
 
     @observable
     private specProcessingInProgress = false;
@@ -126,16 +146,28 @@ export class ApiSettingsCard extends React.Component<
                 }
 
                 { !this.selectedSpec
-                    ? <UploadSpecButton
-                        type='submit' // Ensures we can show validation messages here
-                        onClick={this.specProcessingInProgress ? undefined : this.uploadSpec}
-                        ref={this.uploadSpecButtonRef}
-                    >
-                        { this.specProcessingInProgress
-                            ? <Icon icon={['fas', 'spinner']} spin />
-                            : "Load an OpenAPI or Swagger spec"
-                        }
-                    </UploadSpecButton>
+                    ? <>
+                        <UploadSpecButton
+                            type='submit' // Ensures we can show validation messages here
+                            onClick={this.specProcessingInProgress ? undefined : this.uploadSpec}
+                            ref={this.uploadSpecButtonRef}
+                        >
+                            { this.specProcessingInProgress
+                                ? <Icon icon={['fas', 'spinner']} spin />
+                                : "Load an OpenAPI or Swagger spec"
+                            }
+                        </UploadSpecButton>
+                        <ImportEndpointListButton
+                            type='submit'
+                            onClick={this.specProcessingInProgress ? undefined : this.importEndpointList}
+                            ref={this.importEndpointListButtonRef}
+                        >
+                            { this.specProcessingInProgress
+                                ? <Icon icon={['fas', 'spinner']} spin />
+                                : "Import endpoint list file"
+                            }
+                        </ImportEndpointListButton>
+                    </>
                     : <>
                         <BaseUrlInput
                             placeholder="Base URL for requests to match against this spec"
@@ -161,7 +193,10 @@ export class ApiSettingsCard extends React.Component<
 
             <SettingsExplanation>
                 APIs here will provide documentation & validation for all matching
-                requests within their base URL.
+                requests within their base URL. Use “Import endpoint list file” for JSON
+                from the list-project-endpoints Cursor skill. If entries include a
+                “response” object, saving the API also adds matching mock rules (fixed
+                responses) for simulation.
             </SettingsExplanation>
             <SettingsExplanation>
                 HTTP Toolkit also includes built-in specifications for 2600+ popular public APIs.
@@ -186,6 +221,8 @@ export class ApiSettingsCard extends React.Component<
                 throw new Error('File could not be parsed as either YAML or JSON')
             });
 
+            this.pendingEndpointListForMocks = undefined;
+
             let openApiSpec: OpenAPIObject;
 
             if (content.swagger === "2.0") {
@@ -206,6 +243,11 @@ export class ApiSettingsCard extends React.Component<
                 });
             } else if (content.openapi && semver.satisfies(content.openapi, '^3')) {
                 openApiSpec = content;
+            } else if (isHttptoolkitEndpointsFile(content)) {
+                throw new Error(
+                    'This file is an endpoint list for HTTP Toolkit. ' +
+                    'Use “Import endpoint list file” below instead.'
+                );
             } else {
                 throw new Error("This file doesn't contain an OpenAPI v3 or Swagger v2 specification");
             }
@@ -233,6 +275,66 @@ export class ApiSettingsCard extends React.Component<
         } catch (e) {
             console.log(e);
             updateValidationMessage(this.uploadSpecButtonRef.current!, asError(e).message);
+        } finally {
+            this.specProcessingInProgress = false;
+        }
+    }).bind(this);
+
+    importEndpointList = flow(function * (this: ApiSettingsCard) {
+        updateValidationMessage(this.importEndpointListButtonRef.current!);
+
+        try {
+            const file: string = yield uploadFile('text', ['.json']);
+            if (!file) return;
+
+            this.specProcessingInProgress = true;
+            const content: any = yield attempt(() =>
+                JSON.parse(file)
+            ).catch(() =>
+                yaml.parse(file)
+            ).catch((e) => {
+                console.warn('Endpoint list parse error:', e);
+                throw new Error('File could not be parsed as either YAML or JSON');
+            });
+
+            if (!isHttptoolkitEndpointsFile(content)) {
+                throw new Error(
+                    'Not a valid endpoint list file. It must include ' +
+                    '"httptoolkitEndpoints": "1", "baseUrl", and "endpoints". ' +
+                    'Use the list-project-endpoints Cursor skill to generate one.'
+                );
+            }
+
+            this.pendingEndpointListForMocks = endpointListHasMockResponses(content)
+                ? content
+                : undefined;
+
+            const openApiSpec = endpointListFileToOpenApi(content);
+
+            yield buildApiMetadataAsync(openApiSpec, [
+                'api.build.example'
+            ]);
+
+            this.selectedSpec = openApiSpec;
+
+            const { servers } = openApiSpec;
+            if (servers && servers.length >= 1) {
+                let { url, variables } = servers[0];
+
+                if (variables) {
+                    Object.entries(variables).forEach(([variableName, variable]) => {
+                        url = url.replace(`{${variableName}}`, variable.default.toString());
+                    });
+                }
+
+                requestAnimationFrame(() => this.onBaseUrl(url));
+            }
+        } catch (e) {
+            console.log(e);
+            updateValidationMessage(
+                this.importEndpointListButtonRef.current!,
+                asError(e).message
+            );
         } finally {
             this.specProcessingInProgress = false;
         }
@@ -283,6 +385,7 @@ export class ApiSettingsCard extends React.Component<
 
     saveApi = flow(function * (this: ApiSettingsCard) {
         const baseUrl = this.enteredBaseUrl.replace(/https?:\/\//, '');
+        const baseUrlForMocks = this.enteredBaseUrl;
 
         const api: ApiMetadata = yield buildApiMetadataAsync(
             this.selectedSpec!,
@@ -290,6 +393,25 @@ export class ApiSettingsCard extends React.Component<
         );
         this.props.apiStore!.addCustomApi(baseUrl, api);
         trackEvent({ category: "Config", action: "Add API spec" });
+
+        const pendingMocks = this.pendingEndpointListForMocks;
+        this.pendingEndpointListForMocks = undefined;
+
+        if (pendingMocks) {
+            try {
+                const mockRules = buildMockRulesFromEndpointList(pendingMocks, baseUrlForMocks);
+                if (mockRules.length) {
+                    const groupTitle = `${pendingMocks.title?.trim() || 'Imported API'} mocks`;
+                    this.props.rulesStore!.addImportedMockRulesGroup(groupTitle, mockRules);
+                    trackEvent({ category: "Config", action: "Add endpoint list mock rules" });
+                }
+            } catch (e) {
+                console.error(e);
+                window.alert(
+                    `API spec was saved, but mock rules could not be created: ${asError(e).message}`
+                );
+            }
+        }
 
         this.enteredBaseUrl = "";
         this.selectedSpec = undefined;
@@ -300,6 +422,7 @@ export class ApiSettingsCard extends React.Component<
         this.enteredBaseUrl = "";
         this.baseUrlError = undefined;
         this.selectedSpec = undefined;
+        this.pendingEndpointListForMocks = undefined;
     }
 
     @action.bound

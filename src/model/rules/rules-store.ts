@@ -807,6 +807,15 @@ export class RulesStore {
         this.saveItem([0, 0]);
     }
 
+    /** Insert a rule group of static mock responses (e.g. from imported endpoint lists). */
+    @action.bound
+    addImportedMockRulesGroup(title: string, rules: HtkRule[]) {
+        if (!rules.length) return;
+        const group = buildGroupWrapper(uuid(), title, rules);
+        this.draftRules.items.unshift(group);
+        this.saveItem([0, 0]);
+    }
+
     @action.bound
     ensureRuleDoesNotExist(ruleId: string) {
         const activeRulePath = findItemPath(this.rules, { id: ruleId });
