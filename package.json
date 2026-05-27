@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "prebuild": "rimraf dist",
-    "build": "run-script-os",
+    "build": "node ./node_modules/run-script-os/index.js",
     "build:default": "env-cmd -f ./automation/ts-node.env.js node -r ts-node/register --max_old_space_size=4096 ./node_modules/.bin/webpack --config ./automation/webpack.prod.ts",
     "build:windows": "env-cmd -f ./automation/ts-node.env.js node -r ts-node/register --max_old_space_size=4096 ./node_modules/webpack/bin/webpack.js --config ./automation/webpack.prod.ts",
     "server:setup": "ts-node -P ./automation/tsconfig.json ./automation/setup-server.ts",
