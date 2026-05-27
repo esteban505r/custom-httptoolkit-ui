@@ -28,6 +28,22 @@ import {
 // Fund open source - if you want Pro, help pay for its development.
 // Can't afford it? Get in touch: tim@httptoolkit.com.
 // ------------------------------------------------------------------
+
+/**
+ * Local fork override: when true, transparently force every User instance to
+ * report itself as Pro-subscribed, so paid features work without a real
+ * subscription. Flip to false to use real subscription state.
+ */
+const PRO_FOR_TESTING = true;
+
+function applyProForTesting(user: User): User {
+    if (!PRO_FOR_TESTING) return user;
+    user.isPaidUser = () => true;
+    user.userHasSubscription = () => true;
+    user.isPastDueUser = () => false;
+    return user;
+}
+
 export class AccountStore {
 
     constructor(
@@ -81,7 +97,7 @@ export class AccountStore {
     });
 
     @observable
-    user: User = getLastUserData();
+    user: User = applyProForTesting(getLastUserData());
 
     @observable
     accountDataLastUpdated = 0;
@@ -101,7 +117,8 @@ export class AccountStore {
     }
 
     private updateUser = flow(function * (this: AccountStore) {
-        this.user = yield getLatestUserData();
+        const latest: User = yield getLatestUserData();
+        this.user = applyProForTesting(latest);
         this.accountDataLastUpdated = Date.now();
 
         // Include the user id in error reports whilst they're logged in.
