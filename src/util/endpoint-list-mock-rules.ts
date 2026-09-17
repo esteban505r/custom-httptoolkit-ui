@@ -1,4 +1,3 @@
-import * as uuid from 'uuid/v4';
 import { matchers, completionCheckers } from 'mockttp';
 
 import { MethodName } from '../model/http/methods';
@@ -83,7 +82,7 @@ export function buildMockRulesFromEndpointList(
         const fullUrl = joinBaseUrlAndPath(root, path);
 
         rules.push({
-            id: uuid(),
+            id: crypto.randomUUID(),
             type: 'http',
             activated: true,
             matchers: [

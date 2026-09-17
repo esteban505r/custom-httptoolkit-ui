@@ -83,6 +83,12 @@ export interface HarEntry extends HarFormat.Entry {
     _pinned?: true;
 }
 
+const compareHarEntryStartTimes = (
+    a: Pick<HarFormat.Entry, 'startedDateTime'>,
+    b: Pick<HarFormat.Entry, 'startedDateTime'>
+) => dateFns.parse(a.startedDateTime).getTime() -
+    dateFns.parse(b.startedDateTime).getTime();
+
 export interface HarWebSocketMessage {
     type: 'send' | 'receive';
     opcode: 1 | 2;
@@ -119,7 +125,9 @@ export async function generateHar(
     const errors = otherEvents.filter(e => e.isTlsFailure()) as FailedTlsConnection[];
 
     const sourcePages = getSourcesAsHarPages(exchanges);
-    const entries = await Promise.all(exchanges.map(e => generateHarHttpEntry(e, options)));
+    const entries = (await Promise.all(
+        exchanges.map(e => generateHarHttpEntry(e, options))
+    )).sort(compareHarEntryStartTimes);
     const errorEntries = errors.map(generateHarTlsError);
 
     return {
@@ -529,11 +537,7 @@ export async function parseHar(harContents: unknown): Promise<ParsedHar> {
     const pinnedIds: string[] = []
 
     har.log.entries
-    .sort((a, b) => {
-        const aStartTime = dateFns.parse(a.startedDateTime).getTime();
-        const bStartTime = dateFns.parse(b.startedDateTime).getTime();
-        return aStartTime - bStartTime;
-    })
+    .sort(compareHarEntryStartTimes)
     .forEach((entry, i) => {
         const id = baseId + i;
         const isWebSocket = entry._resourceType === 'websocket';

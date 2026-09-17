@@ -15,7 +15,8 @@ import { ExpandableCardProps } from '../common/card';
 import {
     ReadonlyBodyCardHeader,
     getBodyDownloadFilename,
-    BodyCodingErrorBanner
+    BodyCodingErrorBanner,
+    BodyInfoBanner
 } from '../editor/body-card-components';
 import { ContentViewer } from '../editor/content-viewer';
 
@@ -127,6 +128,12 @@ export class SentResponseBodyCard extends React.Component<ExpandableCardProps & 
                         isPaidUser={isPaidUser}
                     />
                 </header>
+                <BodyInfoBanner
+                    content={message.body.decodedData}
+                    contentType={decodedContentType}
+                    headers={message.headers}
+                    cache={message.cache}
+                />
                 <SendEditorCardContent showFullBorder={false}>
                     <ContentViewer
                         contentId={message.id}

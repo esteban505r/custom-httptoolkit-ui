@@ -146,6 +146,32 @@ describe('Content type parsing', () => {
             });
         });
 
+        it('should detect & override default for undeclared protobuf', () => {
+            const cts = getCompatibleTypes('raw', 'application/octet-stream', Buffer.from('0a0b48656c6c6f20576f726c64', 'hex'));
+            expect(cts).to.deep.equal({
+                preferredContentType: 'protobuf',
+                availableContentTypes: ['raw', 'protobuf', 'text']
+            });
+        });
+
+        it('should not detect truncated protobuf as protobuf', () => {
+            // Starts like the message above, but the last field is cut short:
+            const cts = getCompatibleTypes('raw', 'application/octet-stream', Buffer.from('0a0b48656c6c6f', 'hex'));
+            expect(cts).to.deep.equal({
+                preferredContentType: 'raw',
+                availableContentTypes: ['raw', 'text']
+            });
+        });
+
+        it('should not detect text that starts with a tab as protobuf', () => {
+            // A leading tab (0x09) looks like field 1 with a 64-bit value:
+            const cts = getCompatibleTypes('raw', 'application/octet-stream', Buffer.from('\tindented text, not protobuf\n'));
+            expect(cts).to.deep.equal({
+                preferredContentType: 'raw',
+                availableContentTypes: ['raw', 'text']
+            });
+        });
+
         it('should detect & override default for undeclared grpc+proto', () => {
             const cts = getCompatibleTypes('raw', 'application/octet-stream', Buffer.from('AAAAAAIIAQ==', 'base64'));
             expect(cts).to.deep.equal({

@@ -17,7 +17,8 @@ import {
     EditorCardContent,
     ReadonlyBodyCardHeader,
     getBodyDownloadFilename,
-    BodyCodingErrorBanner
+    BodyCodingErrorBanner,
+    BodyInfoBanner
 } from '../../editor/body-card-components';
 
 import { LoadingCard } from '../../common/loading-card';
@@ -129,6 +130,15 @@ export class HttpBodyCard extends React.Component<ExpandableCardProps & {
                         isPaidUser={isPaidUser}
                     />
                 </header>
+                <BodyInfoBanner
+                    content={message.body.decodedData}
+                    contentType={decodedContentType}
+                    headers={message.headers}
+                    cache={message.cache}
+                    // The card drops its direction marker when expanded, so
+                    // the banner should use symmetric edge-to-edge margins.
+                    direction={expanded ? undefined : direction}
+                />
                 <EditorCardContent showFullBorder={!expanded}>
                     <ContentViewer
                         contentId={editorKey}

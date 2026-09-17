@@ -23,6 +23,8 @@ import {
 import { RulesStore } from '../../../model/rules/rules-store';
 import { RulePriority } from '../../../model/rules/rules';
 
+import { CopyButtonPill } from '../../common/copy-button';
+
 const ConfigContainer = styled.div`
     user-select: text;
 
@@ -63,7 +65,7 @@ const ConfigContainer = styled.div`
 `;
 
 const Spacer = styled.div`
-    flex: 1 1 20px;
+    flex: 1 1 12px;
 `;
 
 function urlSafeBase64(content: string) {
@@ -188,24 +190,11 @@ class AndroidConfig extends React.Component<{
         };
 
         const serializedSetupParams = urlSafeBase64(JSON.stringify(setupParams));
+        const urlWithParams = `https://android.httptoolkit.tech/connect/?data=${serializedSetupParams}`;
 
         return <ConfigContainer>
             <p>
-                Scan the QR code below on your device to install the HTTP Toolkit
-                app, and start intercepting HTTP & HTTPS traffic.
-            </p>
-            <p>
-                Don't have a barcode scanner? Install the <a
-                    href={
-                        `https://play.google.com/store/apps/details?id=tech.httptoolkit.android.v1&referrer=${
-                            serializedSetupParams
-                        }`
-                    }
-                    target='_blank'
-                    rel='noreferrer noopener'
-                >
-                    HTTP Toolkit app
-                </a> manually instead.
+                Scan the QR code below to get started.
             </p>
 
             <Spacer />
@@ -215,16 +204,26 @@ class AndroidConfig extends React.Component<{
                 width={""}
                 // Minimum error correction - shouldn't really be required
                 level='L'
-                value={
-                    `https://android.httptoolkit.tech/connect/?data=${serializedSetupParams}`
-                }
+                value={urlWithParams}
             />
             <Spacer />
 
             <p>
-                Once activated, this will send all HTTP & HTTPS traffic to HTTP Toolkit,
-                and configure the device to trust its HTTPS certificate by default.
+                Can't scan the code? <CopyButtonPill
+                    content={urlWithParams}
+                >Copy</CopyButtonPill> and paste
+                into the <a
+                    href={urlWithParams}
+                    target='_blank'
+                    rel='noreferrer noopener'
+                >HTTP Toolkit app</a> on your device instead.
             </p>
+
+            <p>
+                Once active, this will send all traffic to HTTP Toolkit, and configure
+                the device to trust its HTTPS certificate by default.
+            </p>
+
             <p>
                 <strong>This won't work immediately for all apps.</strong> Some may need changes
                 to trust HTTP Toolkit for HTTPS traffic. <a

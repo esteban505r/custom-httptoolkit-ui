@@ -174,6 +174,7 @@ export function nameStepClass(key: StepClassKey): string {
         case 'callback':
         case 'stream':
         case 'wait-for-request-body':
+        case 'informational-response':
             throw new Error(`${key} step should not be used directly`);
         default:
             throw new UnreachableCheck(key);
@@ -273,6 +274,7 @@ export function summarizeStepClass(key: StepClassKey): string {
         case 'callback':
         case 'stream':
         case 'wait-for-request-body':
+        case 'informational-response':
             throw new Error(`${key} step should not be used directly`);
         default:
             throw new UnreachableCheck(key);

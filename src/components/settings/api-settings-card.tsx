@@ -229,7 +229,8 @@ export class ApiSettingsCard extends React.Component<
                 openApiSpec = yield new Promise((resolve, reject) => {
                     swagger2OpenApi.convertObj(content, {
                         patch: true,
-                        resolve: false
+                        resolve: false,
+                        anchors: true
                     }, (error, result) => {
                         if (error) return reject(error);
 
