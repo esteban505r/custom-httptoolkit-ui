@@ -74,7 +74,10 @@ export function startServerOperationBridge(
                 // JWT must be false (not a paid user) or a valid JWT. N.b. we don't use
                 // _maybe_ paid user - if not sure, we treat as free until the updated
                 // JWT arrives, which will refresh this automatically.
-                jwt: accountStore.user.isPaidUser()
+                // We also require an actual login: PRO_FOR_TESTING forces isPaidUser()
+                // to true, and reading userJwt while logged out throws, which would
+                // abort this autorun and leave the server bridge unauthenticated.
+                jwt: accountStore.isLoggedIn && accountStore.user.isPaidUser()
                     ? accountStore.userJwt
                     : false
             }));

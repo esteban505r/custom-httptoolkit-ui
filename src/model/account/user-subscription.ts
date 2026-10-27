@@ -2,7 +2,10 @@ import type { User } from '@httptoolkit/accounts';
 
 /**
  * Local fork override: when true, every User reports Pro access without a real
- * subscription. Flip to false to use real subscription state.
+ * subscription. This is the single toggle for the whole app — the server reads
+ * the same constant to enable Pro for the CTL and MCP APIs
+ * (see custom-httptoolkit-server/src/constants.ts). Set to false to use real
+ * subscription state everywhere.
  */
 export const PRO_FOR_TESTING = true;
 

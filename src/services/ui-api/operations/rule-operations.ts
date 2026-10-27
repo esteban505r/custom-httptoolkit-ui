@@ -1,7 +1,11 @@
+import { completionCheckers, matchers } from 'mockttp';
+
 import { Operation } from '../api-types';
 import { RulesStore } from '../../../model/rules/rules-store';
+import * as HttpRule from '../../../model/rules/definitions/http-rule-definitions';
 import {
     HtkRule,
+    Matcher,
     RulePriority,
     isHttpBasedRule,
     isWebSocketRule
@@ -19,6 +23,8 @@ export function registerRuleOperations(
     rulesStore: RulesStore
 ): void {
     registry.register(rulesListOperation(rulesStore));
+
+    registry.register(ruleCreateOperation(rulesStore));
 
     registry.register(ruleActivationOperation(rulesStore, true,
         'Activate a rule, or every rule within a group, so that it applies to matching traffic ' +
@@ -138,6 +144,200 @@ function rulesListOperation(rulesStore: RulesStore): Operation {
                 data: {
                     rules: summarizeRuleItems(rulesStore.draftRules.items),
                     unsavedChanges: rulesStore.areSomeRulesUnsaved
+                }
+            };
+        }
+    };
+}
+
+
+const SUPPORTED_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const;
+
+type CreateRuleParams = {
+    url?: unknown;
+    method?: unknown;
+    action?: unknown;
+    status?: unknown;
+    body?: unknown;
+    headers?: unknown;
+    title?: unknown;
+    priority?: unknown;
+};
+
+function buildMatchers(params: CreateRuleParams): { matchers: Matcher[] } | { error: string } {
+    const { url, method } = params;
+
+    if (typeof url !== 'string' || !url.trim()) {
+        return { error: 'Missing required parameter: url' };
+    }
+
+    const ruleMatchers: Matcher[] = [];
+
+    if (method !== undefined) {
+        if (typeof method !== 'string') return { error: 'method must be a string' };
+        const upperMethod = method.toUpperCase();
+        if (!(SUPPORTED_METHODS as ReadonlyArray<string>).includes(upperMethod)) {
+            return { error: `Unsupported method: ${method}. Supported: ${SUPPORTED_METHODS.join(', ')}` };
+        }
+        const MethodMatcher = (HttpRule.MethodMatchers as any)[upperMethod];
+        ruleMatchers.push(new MethodMatcher());
+    }
+
+    // FlexiblePathMatcher is what the UI itself uses: it accepts a bare hostname, a
+    // hostname + path, or a full URL, and matches protocol/port sensibly in each case.
+    ruleMatchers.push(new matchers.FlexiblePathMatcher(url.trim()));
+
+    return { matchers: ruleMatchers };
+}
+
+function buildSteps(params: CreateRuleParams, rulesStore: RulesStore): { steps: any[] } | { error: string } {
+    const action = params.action ?? 'respond';
+
+    if (action === 'close') return { steps: [new HttpRule.CloseConnectionStep()] };
+    if (action === 'reset') return { steps: [new HttpRule.ResetConnectionStep()] };
+    if (action === 'timeout') return { steps: [new HttpRule.TimeoutStep()] };
+    if (action === 'passthrough') return { steps: [new HttpRule.PassThroughStep(rulesStore)] };
+
+    if (action !== 'respond') {
+        return { error: `Unsupported action: ${action}. Supported: respond, close, reset, timeout, passthrough` };
+    }
+
+    const status = params.status ?? 200;
+    if (typeof status !== 'number' || !Number.isInteger(status) || status < 100 || status > 599) {
+        return { error: 'status must be an integer between 100 and 599' };
+    }
+
+    const { body, headers } = params;
+    if (body !== undefined && typeof body !== 'string') {
+        return { error: 'body must be a string' };
+    }
+    if (headers !== undefined && (typeof headers !== 'object' || headers === null || Array.isArray(headers))) {
+        return { error: 'headers must be an object of header name to value' };
+    }
+
+    return {
+        steps: [new HttpRule.StaticResponseStep(
+            status,
+            undefined,
+            body as string | undefined,
+            headers as Record<string, string> | undefined
+        )]
+    };
+}
+
+function ruleCreateOperation(rulesStore: RulesStore): Operation {
+    return {
+        definition: {
+            name: 'rules.create',
+            description: 'Create a new HTTP rule, to mock, block or otherwise intercept matching ' +
+                'traffic. The rule is added at the top of the rule list and saved immediately, so ' +
+                'it applies to live traffic straight away without any UI interaction.\n' +
+                '\n' +
+                'Rules are matched by URL, which may be a bare hostname ("example.com"), a ' +
+                'hostname and path ("example.com/api/thing"), or a full URL. Optionally narrow ' +
+                'the match to a single method. Note that a rule only applies to traffic that is ' +
+                'already being intercepted.',
+            category: 'rules',
+            tiers: ['pro'],
+            annotations: { readOnlyHint: false, idempotentHint: false },
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    url: {
+                        type: 'string',
+                        description: 'The traffic to match: a hostname, a hostname and path, or a full URL'
+                    },
+                    method: {
+                        type: 'string',
+                        description: `Optional HTTP method to match. One of: ${SUPPORTED_METHODS.join(', ')}. ` +
+                            'Omit to match every method.'
+                    },
+                    action: {
+                        type: 'string',
+                        description: 'What the rule does when it matches: "respond" (default) returns ' +
+                            'a fixed response, "close" closes the connection, "reset" resets it, ' +
+                            '"timeout" hangs, and "passthrough" forwards to the real target.'
+                    },
+                    status: {
+                        type: 'number',
+                        description: 'Response status for the "respond" action (default 200)'
+                    },
+                    body: {
+                        type: 'string',
+                        description: 'Response body for the "respond" action'
+                    },
+                    headers: {
+                        type: 'object',
+                        description: 'Response headers for the "respond" action, as name/value pairs'
+                    },
+                    title: {
+                        type: 'string',
+                        description: 'Optional title shown for the rule in the UI'
+                    },
+                    priority: {
+                        type: 'number',
+                        description: 'Match priority: 2 is matched before everything else, 1 is the ' +
+                            'default, 0 is a fallback matched only once nothing else has. Defaults ' +
+                            'to 2, so a new rule takes effect even when a catch-all rule exists.'
+                    }
+                },
+                required: ['url']
+            },
+            outputSchema: {
+                type: 'object',
+                properties: {
+                    id: { type: 'string', description: 'The id of the rule that was created' },
+                    matches: { type: 'string', description: 'Human-readable summary of what it matches' },
+                    steps: { type: 'string', description: 'Human-readable summary of what it does' }
+                }
+            }
+        },
+        handler: async (params: CreateRuleParams) => {
+            const matcherResult = buildMatchers(params);
+            if ('error' in matcherResult) {
+                return { success: false, error: { code: 'INVALID_PARAMS', message: matcherResult.error } };
+            }
+
+            const stepResult = buildSteps(params, rulesStore);
+            if ('error' in stepResult) {
+                return { success: false, error: { code: 'INVALID_PARAMS', message: stepResult.error } };
+            }
+
+            const { priority, title } = params;
+            if (priority !== undefined && ![0, 1, 2].includes(priority as number)) {
+                return {
+                    success: false,
+                    error: { code: 'INVALID_PARAMS', message: 'priority must be 0, 1 or 2' }
+                };
+            }
+            if (title !== undefined && typeof title !== 'string') {
+                return { success: false, error: { code: 'INVALID_PARAMS', message: 'title must be a string' } };
+            }
+
+            const rule: HtkRule = {
+                id: crypto.randomUUID(),
+                type: 'http',
+                activated: true,
+                // Default to OVERRIDE: without it a new rule sits at the same priority as the
+                // default catch-all, and whether it wins depends on list order, which is a
+                // confusing default for a rule created programmatically.
+                priority: (priority as number | undefined) ?? RulePriority.OVERRIDE,
+                matchers: matcherResult.matchers,
+                completionChecker: new completionCheckers.Always(),
+                steps: stepResult.steps
+            } as HtkRule;
+
+            if (title) (rule as { title?: string }).title = title;
+
+            rulesStore.addDraftItem(rule);
+            rulesStore.saveRules();
+
+            return {
+                success: true,
+                data: {
+                    id: rule.id,
+                    matches: summarizeMatcher(rule),
+                    steps: summarizeSteps(rule)
                 }
             };
         }

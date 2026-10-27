@@ -23,6 +23,7 @@ import {
 import { enrichUser } from './user-subscription';
 
 // Pro-for-testing toggle: see user-subscription.ts (PRO_FOR_TESTING).
+// The single flag also enables Pro on the server, so MCP & CTL are unlocked too.
 
 export class AccountStore {
 
